@@ -108,19 +108,76 @@ async def team_review_mrs():
 @app.get("/api/widgets/my-mrs")
 async def widget_my_mrs():
     """
-    Dummy: list of user's own MRs across projects with rebase states.
+    My open MRs assigned to me. Reuses GitLab fetching similar to team_review_mrs.
+    Shows: id, link, has_conflicts, age, is_wip, reviewers_count. Sorted by created_at desc.
     """
-    items = [
-        {"id": 201, "iid": 21, "title": "Refactor: auth flow", "project": "web-portal", "rebase_status": "can_rebase",
-         "web_url": "https://example.com/web-portal/-/merge_requests/21"},
-        {"id": 202, "iid": 22, "title": "Chore: bump deps", "project": "api", "rebase_status": "up_to_date",
-         "web_url": "https://example.com/api/-/merge_requests/22"},
-    ]
+    source = "sample"
+    # Allow overriding via env; default to the requested username
+    target_username = os.getenv("MY_MRS_ASSIGNEE", os.getenv("GITLAB_USERNAME", "zlata.podlucka")).strip()
+
+    items = []
+
+    base_params: dict[str, object] = {
+        "state": "opened",
+        "scope": "all",
+        "order_by": "created_at",
+        "sort": "desc",
+        "per_page": 50,
+    }
+
+    try:
+        live, _ = fetch_gitlab_mrs(target_username, base_params)
+        if isinstance(live, list):
+            items = live
+            source = "gitlab"
+    except Exception as e:
+        print(e)
+        items = []
+        source = "sample"
+
+    # Normalize and compute requested fields
+    now = datetime.now(timezone.utc)
+    def parse_dt(s: str | None):
+        if not s:
+            return None
+        try:
+            # Handle trailing 'Z'
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
+
+    normalized = []
+    for mr in items or []:
+        created_at = mr.get("created_at")
+        created_dt = parse_dt(created_at)
+        age_days = None
+        if created_dt is not None:
+            delta = now - created_dt
+            age_days = max(0, int(delta.total_seconds() // 86400))
+        reviewers = mr.get("reviewers") or []
+        is_wip = bool(mr.get("draft") or mr.get("work_in_progress"))
+        normalized.append({
+            "id": mr.get("id"),
+            "iid": mr.get("iid"),
+            "link": mr.get("web_url"),
+            "has_conflicts": mr.get("has_conflicts"),
+            "created_at": created_at,
+            "age_days": age_days,
+            "is_wip": is_wip,
+            "reviewers_count": len(reviewers),
+        })
+
+    # Ensure sorting by created_at desc if API didn't guarantee
+    normalized.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
     return JSONResponse({
-        "items": items,
-        "count": len(items),
-        "server_time": datetime.now(timezone.utc).isoformat(),
-        "source": "dummy"
+        "items": normalized,
+        "count": len(normalized),
+        "source": source,
+        "assignee": target_username,
+        "server_time": now.isoformat(),
     })
 
 

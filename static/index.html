@@ -123,7 +123,7 @@
 
         <div class="panel bottom-half" id="panel-todos">
           <div class="panel-header">
-            <div class="panel-title">Todos</div>
+            <div class="panel-title">Tiny Todos</div>
             <div class="toolbar">
               <button class="btn" id="refreshTodos">Refresh</button>
             </div>
@@ -226,14 +226,24 @@
       items.forEach(mr=>{
         const el = document.createElement('div');
         el.className = 'card';
-        const statusPill = `<span class="pill">${escapeHtml(mr.rebase_status || '—')}</span>`;
+        const conflictPill = (mr.has_conflicts===true)
+          ? '<span class="pill" style="color: var(--danger); border-color:#7f1d1d">conflicts</span>'
+          : '<span class="pill" style="color: var(--accent);">clean</span>';
+        const wipPill = mr.is_wip ? '<span class="pill" style="color: var(--warn);">WIP</span>' : '';
+        const reviewersPill = `<span class="pill">${Number(mr.reviewers_count||0)} reviewer${Number(mr.reviewers_count||0)===1?'':'s'}</span>`;
+        const agePill = mr.age_days!=null ? `<span class="pill">${mr.age_days}d</span>` : (mr.created_at? `<span class="pill">${escapeHtml(timeSinceISO(mr.created_at))}</span>` : '');
+        const link = mr.link || mr.web_url || '#';
+        const num = (mr.iid ?? mr.id);
         el.innerHTML = `
           <div class="left">
-            <div class="title"><a href="${mr.web_url}" target="_blank" rel="noopener">${escapeHtml(mr.title)}</a></div>
+            <div class="title"><a href="${link}" target="_blank" rel="noopener">MR !${num ?? ''}</a></div>
             <div class="meta">
-              <span class="pill">${escapeHtml(mr.project || '')}</span>
-              <span class="pill">!${mr.iid ?? mr.id}</span>
-              ${statusPill}
+              <span class="pill">id ${mr.id ?? '—'}</span>
+              <span class="pill">!${num ?? '—'}</span>
+              ${agePill}
+              ${wipPill}
+              ${reviewersPill}
+              ${conflictPill}
             </div>
           </div>`;
         container.appendChild(el);
