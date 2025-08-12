@@ -129,7 +129,11 @@
             </div>
           </div>
           <div class="panel-body">
-            <div id="todoList" class="list">
+            <div class="toolbar" style="gap:6px">
+              <input id="newTodoText" type="text" placeholder="New todo…" style="flex:1;min-width:0;background:#0b1220;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px" />
+              <button class="btn" id="addTodoBtn">Add</button>
+            </div>
+            <div id="todoList" class="list" style="margin-top:8px">
               <div class="muted">Loading…</div>
             </div>
           </div>
@@ -260,8 +264,21 @@
         const row = document.createElement('label');
         row.className = 'todo'+(t.done?' done':'');
         row.innerHTML = `
-          <input type="checkbox" ${t.done?'checked':''} disabled />
+          <input type="checkbox" ${t.done?'checked':''} />
           <span>${escapeHtml(t.text)}</span>`;
+        const cb = row.querySelector('input[type="checkbox"]');
+        cb.addEventListener('change', async () => {
+          cb.disabled = true;
+          try{
+            const res = await fetch(`/api/widgets/todos/${t.id}/done`, {method:'POST'});
+            if(!res.ok) throw new Error('HTTP '+res.status);
+            await loadTodos();
+          }catch(e){
+            alert('Failed to complete todo: '+String(e));
+            cb.disabled = false;
+            cb.checked = false;
+          }
+        });
         container.appendChild(row);
       });
     }
@@ -288,6 +305,25 @@
     document.getElementById('refreshTodos').addEventListener('click', loadTodos);
     document.getElementById('btnRebaseAll').addEventListener('click', rebaseAll);
     document.getElementById('btnRefreshAll').addEventListener('click', ()=>{loadTeam(); loadMine(); loadTodos();});
+    document.getElementById('addTodoBtn').addEventListener('click', async ()=>{
+      const input = document.getElementById('newTodoText');
+      const text = (input.value||'').trim();
+      if(!text) return;
+      try{
+        const res = await fetch('/api/widgets/todos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text})});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        input.value='';
+        await loadTodos();
+      }catch(e){
+        alert('Failed to add todo: '+String(e));
+      }
+    });
+    document.getElementById('newTodoText').addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        document.getElementById('addTodoBtn').click();
+      }
+    });
 
     // Initial loads + auto-refresh
     loadTeam();

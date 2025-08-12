@@ -1,13 +1,14 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Body, Path
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import HTMLResponse
 
 from env_loader import load_env_from_dotenv
 from mr_fetcher import fetch_gitlab_mrs
+from todos import write_todos, read_todos
 
 app = FastAPI(title="Dev Portal")
 
@@ -137,6 +138,7 @@ async def widget_my_mrs():
 
     # Normalize and compute requested fields
     now = datetime.now(timezone.utc)
+
     def parse_dt(s: str | None):
         if not s:
             return None
@@ -184,19 +186,53 @@ async def widget_my_mrs():
 @app.get("/api/widgets/todos")
 async def widget_todos():
     """
-    Dummy: small todo list for today.
+    Simple todo list backed by data/todos.csv.
+    - Each pending todo is stored as a single line (description only).
+    - Completed items are removed from the file.
     """
-    items = [
-        {"id": "t1", "text": "Review MR !11", "done": False},
-        {"id": "t2", "text": "Prepare deployment notes", "done": True},
-        {"id": "t3", "text": "Check flaky test in CI", "done": False},
-    ]
+    texts = read_todos()
+    items = [{"id": idx, "text": t, "done": False} for idx, t in enumerate(texts)]
     return JSONResponse({
         "items": items,
         "count": len(items),
         "server_time": datetime.now(timezone.utc).isoformat(),
-        "source": "dummy"
+        "source": "file"
     })
+
+
+@app.post("/api/widgets/todos")
+async def create_todo(text: str = Body(..., embed=True)):
+    """
+    Create a new todo item by appending to data/todos.csv.
+    Accepts JSON body: { "text": "..." }
+    """
+    text = (text or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "Text must not be empty"}, status_code=400)
+
+    text = text.replace("\r", " ").replace("\n", " ")
+    if len(text) > 300:
+        text = text[:300].rstrip()
+
+    lines = read_todos()
+    lines.append(text)
+    write_todos(lines)
+
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/widgets/todos/{item_id}/done")
+async def complete_todo(item_id: int = Path(..., ge=0)):
+    """
+    Mark todo as done by its position (index) and remove it from the CSV.
+    """
+    lines = read_todos()
+    if item_id < 0 or item_id >= len(lines):
+        return JSONResponse({"ok": False, "error": "Todo not found"}, status_code=404)
+    # Remove the item
+    del lines[item_id]
+    write_todos(lines)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/api/actions/rebase-all")
@@ -225,11 +261,9 @@ async def action_rebase_all():
         "per_page": 50,
     }
 
-    # Try to fetch assigned MRs first (this also validates the token)
     try:
         mrs, _ = fetch_gitlab_mrs(target_username, base_params)
     except Exception as e:
-        # Heuristically map common auth/network issues
         msg = str(e)
         status = 500
         if "HTTP 401" in msg or "401" in msg:
@@ -245,7 +279,6 @@ async def action_rebase_all():
             "error": "GitLab is not configured",
         }, status_code=400)
 
-    # Prepare to call rebase endpoint for each MR
     import urllib.request
 
     attempted = 0
@@ -265,11 +298,9 @@ async def action_rebase_all():
         req.add_header("PRIVATE-TOKEN", token)
         req.add_header("Accept", "application/json")
         req.add_header("Content-Type", "application/json")
-        # Empty body for PUT
         req.data = b""
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                # GitLab returns 202 Accepted if rebase started; 200 if already up to date
                 if 200 <= resp.status < 300:
                     succeeded += 1
                     if isinstance(iid, int):
@@ -297,7 +328,6 @@ async def action_rebase_all():
         "failures": failures,
         "server_time": datetime.now(timezone.utc).isoformat(),
         "source": "gitlab",
-        # Keep compatibility with existing frontend which expects a job-like response
         "job_id": f"rebase_{int(datetime.now(timezone.utc).timestamp())}",
         "status": "done"
     })
