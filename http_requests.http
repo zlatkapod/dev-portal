@@ -32,15 +32,3 @@ Content-Type: application/json
 {}
 
 ###
-
-# API: Unread Email
-GET http://127.0.0.1:8000/api/widgets/unread-email
-Accept: application/json
-
-###
-
-# API: Unread Slack
-GET http://127.0.0.1:8000/api/widgets/unread-slack
-Accept: application/json
-
-###
