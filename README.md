@@ -1,76 +1,79 @@
-# DevPortal
+# Dev Portal — lightweight developer dashboard with FastAPI
 
-A lightweight developer dashboard built with FastAPI. It aggregates day-to-day developer signals into simple widgets, with an initial focus on GitLab Merge Requests that may need your review. The UI can be served statically while the backend fetches live data from GitLab when configured.
+Dev Portal is a small, pragmatic dashboard that aggregates everyday developer signals into simple widgets. It’s built on FastAPI and serves a minimal static UI from `/static/index.html` with JSON endpoints per widget. When GitLab configuration is present, it fetches live data; otherwise endpoints return empty/dummy-friendly results so the UI stays usable.
 
-Note: This project is in an early stage and will be refactored and reorganized. The goal of this README is to help you get oriented and run it quickly.
+## What it’s for
+- Quickly see teammates’ Merge Requests that need review
+- Glance at your own open MRs and basic state (age, conflicts, WIP, reviewers)
+- Keep a tiny “today” todo list backed by a CSV file
+- Trigger a “rebase all my MRs” action against GitLab
 
-## What this project does (high level)
-- Serves a minimal dashboard (at `/`) showing a list of colleagues’ Merge Requests.
-- When GitLab access is configured, fetches MRs using the GitLab REST API and filters them for quick review triage.
-- When GitLab is not configured, it falls back to sample/dummy data so you can still see the UI.
-- Exposes a few additional dummy widgets and actions that illustrate the intended direction (e.g., "my MRs", todos, unread counters, "rebase all").
+## Features
+- Dashboard at `/` (served from `static/index.html` if present; otherwise an inline HTML page)
+- Static files served under `/static`
+- Widget APIs:
+  - `GET /api/widgets/review-mrs` — live GitLab fetch (when configured), filtered to MRs that need review; normalized payload
+  - `GET /api/widgets/my-mrs` — live GitLab fetch (when configured), normalized with extra fields like `age_days`, `reviewers_count`, `has_conflicts`
+  - `GET /api/widgets/todos` — returns simple list read from `data/todos.csv`
+  - `POST /api/widgets/todos` — add a todo item `{ "text": "..." }`
+  - `POST /api/widgets/todos/{id}/done` — mark todo as done (removes it from the CSV)
+- Action API:
+  - `POST /api/actions/rebase-all` — attempts to rebase all open MRs assigned to the configured user via GitLab API
+- GitLab MR fetching strategy:
+  - Calls the Merge Requests API once per assignee username, aggregates, and de-duplicates by MR `id`
+  - Returns a consistent, minimal JSON shape for the UI
+- Environment-driven configuration with precedence:
+  1) Process/OS environment (highest)
+  2) `.env.local` (your private, real settings; not committed)
+  3) `.env` (dummy defaults; committed)
 
-## GitLab API reference used
-- The project uses the "List merge requests" endpoint as a foundation:
-  https://docs.gitlab.com/api/merge_requests/#list-merge-requests
+## Configuration
+Environment variables are loaded by a minimal loader that does NOT override already-set OS variables. Put real secrets only in your shell/session or in `.env.local` (which is ignored by git). The tracked `.env` contains safe dummy placeholders.
 
-## Environment variables
-Create a `.env` file in the project root to configure live GitLab calls. These are read on startup.
+Common variables:
+- `GITLAB_API_URL` — Base GitLab API URL (ends with `/api/v4`), e.g. `https://gitlab.com/api/v4`
+- `GITLAB_TOKEN` — Personal Access Token with API scope
+- `GITLAB_ASSIGNEES` — Comma-separated GitLab usernames to fetch as assignees (aggregated server-side)
+- `GITLAB_USERNAME` — Default username fallback if `GITLAB_ASSIGNEES` is empty
+- `MY_MRS_ASSIGNEE` — Optional override for the user targeted by `my-mrs` and `rebase-all` (defaults to `GITLAB_USERNAME`)
 
-Required for live GitLab queries:
-- GITLAB_API_URL: Base GitLab API URL, typically ends with `/api/v4`.
-  - Example: `https://gitlab.com/api/v4`
-- GITLAB_TOKEN: Personal Access Token with sufficient permissions to read merge requests (API scope).
-  - Example: `glpat-********************************`
-
-Optional selectors and defaults:
-- GITLAB_ASSIGNEES: Comma-separated GitLab usernames to query as assignees. If set, the app will call the MR list endpoint once per username and aggregate results.
-  - Example: `alice,bob,charlie`
-- GITLAB_USERNAME: Default username fallback; used as the single assignee if `GITLAB_ASSIGNEES` is not provided.
-  - Example: `john.doe`
-
-Currently not used (reserved for future features):
-- GITLAB_USER_ID: Numeric user ID that may be used by future endpoints or actions.
-
-Behavior notes:
-- If GITLAB_API_URL or GITLAB_TOKEN is missing, the backend will not call GitLab and will return sample data instead so the UI remains usable.
+Example `.env` (dummy values only):
+```
+GITLAB_API_URL="https://gitlab.com/api/v4"
+GITLAB_TOKEN="dummy-token-change-me"
+GITLAB_USERNAME="john.doe"
+# If set, takes precedence over GITLAB_USERNAME in fetcher
+GITLAB_ASSIGNEES="alice,bob,charlie"
+```
+Notes:
+- If `GITLAB_API_URL` or `GITLAB_TOKEN` is missing, endpoints dependent on GitLab return empty or sample-friendly responses; the UI will display “Sample data”.
+- For multiple assignees, the app queries per user and aggregates results server-side.
 
 ## Quick start
+
 Prerequisites:
-- Python 3.11+ recommended
+- Python 3.10+
 
-Install dependencies (FastAPI and Uvicorn):
-- `pip install fastapi uvicorn`
-
-Create `.env` in the project root (see the variables above). Minimal example for live GitLab use:
+Install dependencies:
 ```
-GITLAB_API_URL="https://gitlab.example.com/api/v4"
-GITLAB_TOKEN="glpat-XXXXXXXXXXXXXXXX"
-GITLAB_ASSIGNEES="alice,bob"
-# or use GITLAB_USERNAME if you want to query a single user
-# GITLAB_USERNAME="alice"
+pip install fastapi uvicorn
 ```
 
-Run the server:
-- `uvicorn main:app --reload`
+Run the app (development):
+```
+uvicorn main:app --reload
+```
+The dashboard will be available at http://127.0.0.1:8000/
 
-Open the dashboard:
-- http://127.0.0.1:8000/
+Test endpoints (optional):
+- Use the `http_requests.http` file with your IDE HTTP client, or curl the endpoints listed above.
 
-Try widget endpoints (examples):
-- Review MRs widget (JSON): `GET http://127.0.0.1:8000/api/widgets/review-mrs`
-- My MRs widget (dummy): `GET http://127.0.0.1:8000/api/widgets/my-mrs`
-- Todos widget (dummy): `GET http://127.0.0.1:8000/api/widgets/todos`
-- Action (dummy): `POST http://127.0.0.1:8000/api/actions/rebase-all`
+## Development notes
+- Static UI is located at `static/index.html`. If the file is removed, the app serves a minimal inline dashboard.
+- Todos are stored line-by-line in `data/todos.csv`. Completed items are removed.
+- The rebase action uses GitLab’s `PUT /projects/:id/merge_requests/:iid/rebase` per MR.
 
-Tip: The repository includes `test_main.http` with ready-to-run HTTP snippets (usable in many IDEs).
-
-## Orientation and structure
-- `main.py` – FastAPI application with a tiny `.env` loader and endpoints. It attempts to query GitLab MRs per assignee username and aggregates results. If env is missing, it serves sample data.
-- `static/` – Contains a static dashboard (`index.html`). If present, the app serves it at `/static` and also uses it for the home page if available.
-- `static/dummy/gl_mr_res.json` – Sample data for reference.
-- `test_main.http` – Handy HTTP requests to exercise the API.
-
-## Security and notes
-- Do NOT commit real tokens to version control. Keep `.env` local and out of VCS. Rotate any token that may have been exposed.
-- This project is under active refactoring; endpoint names, shapes, and filtering logic may change.
+## Security and secrets
+- A proper `.gitignore` is included to ignore `.env` and `.env.local`. Keep real tokens in environment variables or `.env.local` only.
+- The tracked `.env` file contains sanitized dummy placeholders; do not put real secrets there.
+- If you previously committed real secrets, rotate them immediately.
