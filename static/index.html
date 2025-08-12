@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dev Portal Dashboard</title>
+  <style>
+    :root{--bg:#0f172a;--card:#111827;--text:#e5e7eb;--muted:#94a3b8;--accent:#22c55e;--danger:#ef4444;--border:#1f2937;--link:#60a5fa;--warn:#f59e0b}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+    h1{font-size:18px;margin:0}
+    .badge{font-size:11px;color:var(--muted);margin-left:8px}
+
+    .layout{display:grid;grid-template-columns:1fr 1fr 340px;gap:16px;max-width:1500px;margin:0 auto;padding:16px}
+    @media (max-width:1200px){.layout{grid-template-columns:1fr 1fr}} 
+    @media (max-width:900px){.layout{grid-template-columns:1fr}} 
+
+    .column{display:flex;flex-direction:column;gap:12px;min-height:0}
+    .column > .panel{flex:1}
+
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;min-height:200px}
+    .panel.small{min-height:140px}
+    .panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border)}
+    .panel-title{font-weight:600;font-size:14px}
+    .panel-body{padding:12px;display:flex;flex-direction:column;gap:10px;overflow:auto}
+
+    .toolbar{display:flex;gap:8px;align-items:center}
+    .btn{background:#1f2937;border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer}
+    .btn:hover{border-color:#374151}
+    .btn.primary{border-color:#2563eb;color:#dbeafe}
+    .btn.danger{border-color:#7f1d1d;color:#fecaca}
+
+    .list{display:flex;flex-direction:column;gap:10px}
+    .card{background:transparent;border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;gap:12px;align-items:flex-start}
+    .left{flex:1;min-width:0}
+    .title{font-weight:600;font-size:14px;margin:0 0 6px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .meta{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+    a{color:var(--link);text-decoration:none}
+    a:hover{text-decoration:underline}
+
+    .empty{border:1px dashed var(--border);background:rgba(31,41,55,.35);border-radius:10px;padding:16px;text-align:center;color:var(--muted)}
+    .muted{color:var(--muted);font-size:12px}
+
+    .split-vertical{display:flex;flex-direction:column;gap:12px}
+    .top-half{min-height:180px}
+    .bottom-half{min-height:220px}
+
+    .todo{display:flex;align-items:center;gap:10px;background:rgba(31,41,55,.45);border:1px solid var(--border);border-radius:8px;padding:10px}
+    .todo input[type="checkbox"]{accent-color:#22c55e}
+    .todo.done{opacity:.6}
+
+    .status{font-size:12px}
+    .status.ok{color:var(--accent)}
+    .status.err{color:var(--danger)}
+    .status.warn{color:var(--warn)}
+
+    footer{padding:10px 18px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;text-align:center}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Dev Portal<span class="badge">dashboard</span></h1>
+    </div>
+    <div class="muted" id="envInfo">—</div>
+  </header>
+
+  <section class="layout">
+    <!-- Column 1: Team review MRs -->
+    <div class="column">
+      <div class="panel" id="panel-team">
+        <div class="panel-header">
+          <div class="panel-title">Team MRs needing review</div>
+          <div class="toolbar">
+            <button class="btn" id="refreshTeam">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div id="teamList" class="list">
+            <div class="muted">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 2: My MRs -->
+    <div class="column">
+      <div class="panel" id="panel-mine">
+        <div class="panel-header">
+          <div class="panel-title">My Merge Requests</div>
+          <div class="toolbar">
+            <button class="btn" id="refreshMine">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div id="myList" class="list">
+            <div class="muted">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 3: Actions (top) + Todos (bottom) -->
+    <div class="column">
+      <div class="split-vertical">
+        <div class="panel top-half" id="panel-actions">
+          <div class="panel-header">
+            <div class="panel-title">Actions</div>
+            <div class="toolbar">
+              <span id="jobStatus" class="status"></span>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="toolbar">
+              <button class="btn primary" id="btnRebaseAll">Rebase All My MRs</button>
+              <button class="btn" id="btnRefreshAll">Refresh All</button>
+            </div>
+            <div class="muted">Use the buttons above to trigger common actions.</div>
+          </div>
+        </div>
+
+        <div class="panel bottom-half" id="panel-todos">
+          <div class="panel-header">
+            <div class="panel-title">Todos</div>
+            <div class="toolbar">
+              <button class="btn" id="refreshTodos">Refresh</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="todoList" class="list">
+              <div class="muted">Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Live data when configured · Auto-refresh 60s · Served from /static/index.html
+  </footer>
+
+  <script>
+    function escapeHtml(str){return String(str).replace(/[&<>"]+/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s]))}
+    function timeSinceISO(iso){ if(!iso) return ''; const d = new Date(iso); return timeSince(d)+' ago'; }
+    function timeSince(date){
+      const seconds = Math.floor((Date.now()-date.getTime())/1000);
+      const intervals = [[31536000,'y'],[2592000,'mo'],[604800,'w'],[86400,'d'],[3600,'h'],[60,'m']];
+      for(const [sec,label] of intervals){const v=Math.floor(seconds/sec); if(v>=1) return v+label;}
+      return seconds+'s';
+    }
+
+    async function loadTeam(){
+      const el = document.getElementById('teamList');
+      el.innerHTML = '<div class="muted">Loading…</div>';
+      try{
+        const res = await fetch('/api/widgets/review-mrs');
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+        const { items, source, username } = data;
+        document.getElementById('envInfo').textContent = source === 'gitlab' ? ('Live · '+(username||'')) : 'Sample data';
+        renderMRs(el, items);
+      }catch(e){
+        el.innerHTML = `<div class="empty">Failed to load team MRs: ${escapeHtml(String(e))}</div>`;
+      }
+    }
+
+    async function loadMine(){
+      const el = document.getElementById('myList');
+      el.innerHTML = '<div class="muted">Loading…</div>';
+      try{
+        const res = await fetch('/api/widgets/my-mrs');
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+        const { items } = data;
+        renderMyMRs(el, items);
+      }catch(e){
+        el.innerHTML = `<div class="empty">Failed to load my MRs: ${escapeHtml(String(e))}</div>`;
+      }
+    }
+
+    async function loadTodos(){
+      const el = document.getElementById('todoList');
+      el.innerHTML = '<div class="muted">Loading…</div>';
+      try{
+        const res = await fetch('/api/widgets/todos');
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+        const { items } = data;
+        renderTodos(el, items);
+      }catch(e){
+        el.innerHTML = `<div class="empty">Failed to load todos: ${escapeHtml(String(e))}</div>`;
+      }
+    }
+
+    function renderMRs(container, items){
+      if(!items || items.length===0){
+        container.innerHTML = '<div class="empty">No merge requests here. 🎉</div>';
+        return;
+      }
+      container.innerHTML = '';
+      items.forEach(mr=>{
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `
+          <div class="left">
+            <div class="title"><a href="${mr.web_url}" target="_blank" rel="noopener">${escapeHtml(mr.title)}</a></div>
+            <div class="meta">
+              <span class="pill">!${mr.iid ?? mr.id}</span>
+              ${mr.author ? `<span class="pill">by ${escapeHtml(mr.author.name || mr.author.username || 'unknown')}</span>`:''}
+              ${mr.created_at ? `<span class="pill">${escapeHtml(timeSinceISO(mr.created_at))}</span>`:''}
+            </div>
+          </div>`;
+        container.appendChild(el);
+      });
+    }
+
+    function renderMyMRs(container, items){
+      if(!items || items.length===0){
+        container.innerHTML = '<div class="empty">You have no open merge requests.</div>';
+        return;
+      }
+      container.innerHTML = '';
+      items.forEach(mr=>{
+        const el = document.createElement('div');
+        el.className = 'card';
+        const statusPill = `<span class="pill">${escapeHtml(mr.rebase_status || '—')}</span>`;
+        el.innerHTML = `
+          <div class="left">
+            <div class="title"><a href="${mr.web_url}" target="_blank" rel="noopener">${escapeHtml(mr.title)}</a></div>
+            <div class="meta">
+              <span class="pill">${escapeHtml(mr.project || '')}</span>
+              <span class="pill">!${mr.iid ?? mr.id}</span>
+              ${statusPill}
+            </div>
+          </div>`;
+        container.appendChild(el);
+      });
+    }
+
+    function renderTodos(container, items){
+      if(!items || items.length===0){
+        container.innerHTML = '<div class="empty">No todos for now.</div>';
+        return;
+      }
+      container.innerHTML = '';
+      items.forEach(t=>{
+        const row = document.createElement('label');
+        row.className = 'todo'+(t.done?' done':'');
+        row.innerHTML = `
+          <input type="checkbox" ${t.done?'checked':''} disabled />
+          <span>${escapeHtml(t.text)}</span>`;
+        container.appendChild(row);
+      });
+    }
+
+    async function rebaseAll(){
+      const status = document.getElementById('jobStatus');
+      status.textContent = 'Queuing…';
+      status.className = 'status warn';
+      try{
+        const res = await fetch('/api/actions/rebase-all', {method:'POST'});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const job = await res.json();
+        status.textContent = `Queued #${job.job_id || '—'} (${job.status})`;
+        status.className = 'status ok';
+      }catch(e){
+        status.textContent = 'Failed: '+String(e);
+        status.className = 'status err';
+      }
+    }
+
+    // Wire buttons
+    document.getElementById('refreshTeam').addEventListener('click', loadTeam);
+    document.getElementById('refreshMine').addEventListener('click', loadMine);
+    document.getElementById('refreshTodos').addEventListener('click', loadTodos);
+    document.getElementById('btnRebaseAll').addEventListener('click', rebaseAll);
+    document.getElementById('btnRefreshAll').addEventListener('click', ()=>{loadTeam(); loadMine(); loadTodos();});
+
+    // Initial loads + auto-refresh
+    loadTeam();
+    loadMine();
+    loadTodos();
+    setInterval(()=>{loadTeam(); loadMine(); loadTodos();}, 60000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+# Test your FastAPI endpoints
+
+# Dashboard HTML
+GET http://127.0.0.1:8000/
+Accept: text/html
+
+###
+
+# API: Merge Requests
+GET http://127.0.0.1:8000/api/widgets/review-mrs
+Accept: application/json
+
+###
+
+# API: My MRs
+GET http://127.0.0.1:8000/api/widgets/my-mrs
+Accept: application/json
+
+###
+
+# API: Todos
+GET http://127.0.0.1:8000/api/widgets/todos
+Accept: application/json
+
+###
+
+# API: Rebase All
+POST http://127.0.0.1:8000/api/actions/rebase-all
+Accept: application/json
+Content-Type: application/json
+
+{}
+
+###
+
+# API: Unread Email
+GET http://127.0.0.1:8000/api/widgets/unread-email
+Accept: application/json
+
+###
+
+# API: Unread Slack
+GET http://127.0.0.1:8000/api/widgets/unread-slack
+Accept: application/json
+
+###
