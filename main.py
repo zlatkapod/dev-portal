@@ -110,7 +110,8 @@ async def team_review_mrs():
 async def widget_my_mrs():
     """
     My open MRs assigned to me. Reuses GitLab fetching similar to team_review_mrs.
-    Shows: id, link, has_conflicts, age, is_wip, reviewers_count. Sorted by created_at desc.
+    Shows: id, link, has_conflicts, age_days (by created_at), is_wip, reviewers_count, updated_at, updated_ago.
+    Sorted by updated_at desc.
     """
     source = "sample"
     # Allow overriding via env; default to the requested username
@@ -121,7 +122,7 @@ async def widget_my_mrs():
     base_params: dict[str, object] = {
         "state": "opened",
         "scope": "all",
-        "order_by": "created_at",
+        "order_by": "updated_at",
         "sort": "desc",
         "per_page": 50,
     }
@@ -150,6 +151,30 @@ async def widget_my_mrs():
         except Exception:
             return None
 
+    def humanize_delta(delta_seconds: float) -> str:
+        # Returns a compact human-readable string like 'just now', '5m', '2h', '3d'
+        if delta_seconds < 0:
+            delta_seconds = 0
+        if delta_seconds < 45:
+            return "just now"
+        minutes = delta_seconds // 60
+        if minutes < 60:
+            return f"{int(minutes)}m"
+        hours = minutes // 60
+        if hours < 48:
+            return f"{int(hours)}h"
+        days = hours // 24
+        if days < 14:
+            return f"{int(days)}d"
+        weeks = days // 7
+        if weeks < 8:
+            return f"{int(weeks)}w"
+        years = days // 365
+        if years >= 1:
+            return f"{int(years)}y"
+        months = days // 30
+        return f"{int(months)}mo"
+
     normalized = []
     for mr in items or []:
         created_at = mr.get("created_at")
@@ -158,6 +183,14 @@ async def widget_my_mrs():
         if created_dt is not None:
             delta = now - created_dt
             age_days = max(0, int(delta.total_seconds() // 86400))
+
+        updated_at = mr.get("updated_at")
+        updated_dt = parse_dt(updated_at)
+        updated_ago = None
+        if updated_dt is not None:
+            udelta = now - updated_dt
+            updated_ago = humanize_delta(udelta.total_seconds())
+
         reviewers = mr.get("reviewers") or []
         is_wip = bool(mr.get("draft") or mr.get("work_in_progress"))
         normalized.append({
@@ -167,12 +200,14 @@ async def widget_my_mrs():
             "has_conflicts": mr.get("has_conflicts"),
             "created_at": created_at,
             "age_days": age_days,
+            "updated_at": updated_at,
+            "updated_ago": updated_ago,
             "is_wip": is_wip,
             "reviewers_count": len(reviewers),
         })
 
-    # Ensure sorting by created_at desc if API didn't guarantee
-    normalized.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    # Ensure sorting by updated_at desc if API didn't guarantee
+    normalized.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
 
     return JSONResponse({
         "items": normalized,

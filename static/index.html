@@ -236,6 +236,11 @@
         const wipPill = mr.is_wip ? '<span class="pill" style="color: var(--warn);">WIP</span>' : '';
         const reviewersPill = `<span class="pill">${Number(mr.reviewers_count||0)} reviewer${Number(mr.reviewers_count||0)===1?'':'s'}</span>`;
         const agePill = mr.age_days!=null ? `<span class="pill">${mr.age_days}d</span>` : (mr.created_at? `<span class="pill">${escapeHtml(timeSinceISO(mr.created_at))}</span>` : '');
+        const updatedLabel = (typeof mr.updated_ago === 'string' && mr.updated_ago)
+          ? `updated ${escapeHtml(mr.updated_ago)}`
+          : (mr.updated_at ? `updated ${escapeHtml(timeSinceISO(mr.updated_at))}` : '');
+        const updatedTitle = mr.updated_at ? new Date(mr.updated_at).toLocaleString() : '';
+        const updatedPill = updatedLabel ? `<span class="pill" title="${escapeHtml(updatedTitle)}">${updatedLabel}</span>` : '';
         const link = mr.link || mr.web_url || '#';
         const num = (mr.iid ?? mr.id);
         el.innerHTML = `
@@ -245,6 +250,7 @@
               <span class="pill">id ${mr.id ?? '—'}</span>
               <span class="pill">!${num ?? '—'}</span>
               ${agePill}
+              ${updatedPill}
               ${wipPill}
               ${reviewersPill}
               ${conflictPill}
