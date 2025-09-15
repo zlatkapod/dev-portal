@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Body, Path
@@ -70,7 +71,7 @@ async def team_review_mrs():
         "scope": "all",
         "order_by": "updated_at",
         "sort": "desc",
-        "per_page": 50,
+        "per_page": 30,
     }
 
     try:
@@ -270,99 +271,3 @@ async def complete_todo(item_id: int = Path(..., ge=0)):
     return JSONResponse({"ok": True})
 
 
-@app.post("/api/actions/rebase-all")
-async def action_rebase_all():
-    """
-    Rebase all open MRs assigned to the configured user (default: 'zlata.podlucka').
-    - Uses GitLab API: PUT /projects/:id/merge_requests/:iid/rebase
-    - Validates token by attempting to fetch MRs; returns 400/401 on misconfiguration/unauthorized.
-    - Returns a summary of attempts.
-    """
-    api_url = os.getenv("GITLAB_API_URL", "").strip()
-    token = os.getenv("GITLAB_TOKEN", "").strip()
-    if not api_url or not token:
-        return JSONResponse({
-            "ok": False,
-            "error": "GitLab is not configured (GITLAB_API_URL or GITLAB_TOKEN missing)",
-        }, status_code=400)
-
-    target_username = os.getenv("MY_MRS_ASSIGNEE", os.getenv("GITLAB_USERNAME", "zlata.podlucka")).strip()
-
-    base_params: dict[str, object] = {
-        "state": "opened",
-        "scope": "all",
-        "order_by": "created_at",
-        "sort": "desc",
-        "per_page": 50,
-    }
-
-    try:
-        mrs, _ = fetch_gitlab_mrs(target_username, base_params)
-    except Exception as e:
-        msg = str(e)
-        status = 500
-        if "HTTP 401" in msg or "401" in msg:
-            status = 401
-        return JSONResponse({
-            "ok": False,
-            "error": f"Failed to fetch MRs: {msg}",
-        }, status_code=status)
-
-    if mrs is None:
-        return JSONResponse({
-            "ok": False,
-            "error": "GitLab is not configured",
-        }, status_code=400)
-
-    import urllib.request
-
-    attempted = 0
-    succeeded = 0
-    failures: list[dict] = []
-    rebased_iids: list[int] = []
-
-    for mr in mrs or []:
-        project_id = mr.get("project_id")
-        iid = mr.get("iid")
-        if project_id is None or iid is None:
-            continue
-        attempted += 1
-        url = f"{api_url.rstrip('/')}/projects/{project_id}/merge_requests/{iid}/rebase"
-        # GitLab API: rebase uses PUT method
-        req = urllib.request.Request(url, method="PUT")
-        req.add_header("PRIVATE-TOKEN", token)
-        req.add_header("Accept", "application/json")
-        req.add_header("Content-Type", "application/json")
-        req.data = b""
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                if 200 <= resp.status < 300:
-                    succeeded += 1
-                    if isinstance(iid, int):
-                        rebased_iids.append(iid)
-                else:
-                    failures.append({
-                        "project_id": project_id,
-                        "iid": iid,
-                        "status": resp.status,
-                    })
-        except Exception as ex:
-            failures.append({
-                "project_id": project_id,
-                "iid": iid,
-                "error": str(ex),
-            })
-
-    return JSONResponse({
-        "ok": True,
-        "assignee": target_username,
-        "attempted": attempted,
-        "succeeded": succeeded,
-        "failed": len(failures),
-        "rebased_iids": rebased_iids,
-        "failures": failures,
-        "server_time": datetime.now(timezone.utc).isoformat(),
-        "source": "gitlab",
-        "job_id": f"rebase_{int(datetime.now(timezone.utc).timestamp())}",
-        "status": "done"
-    })

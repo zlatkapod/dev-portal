@@ -114,7 +114,6 @@
           </div>
           <div class="panel-body">
             <div class="toolbar">
-              <button class="btn primary" id="btnRebaseAll">Rebase All My MRs</button>
               <button class="btn" id="btnRefreshAll">Refresh All</button>
             </div>
             <div class="muted">Use the buttons above to trigger common actions.</div>
@@ -289,27 +288,10 @@
       });
     }
 
-    async function rebaseAll(){
-      const status = document.getElementById('jobStatus');
-      status.textContent = 'Queuing…';
-      status.className = 'status warn';
-      try{
-        const res = await fetch('/api/actions/rebase-all', {method:'POST'});
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        const job = await res.json();
-        status.textContent = `Queued #${job.job_id || '—'} (${job.status})`;
-        status.className = 'status ok';
-      }catch(e){
-        status.textContent = 'Failed: '+String(e);
-        status.className = 'status err';
-      }
-    }
-
     // Wire buttons
     document.getElementById('refreshTeam').addEventListener('click', loadTeam);
     document.getElementById('refreshMine').addEventListener('click', loadMine);
     document.getElementById('refreshTodos').addEventListener('click', loadTodos);
-    document.getElementById('btnRebaseAll').addEventListener('click', rebaseAll);
     document.getElementById('btnRefreshAll').addEventListener('click', ()=>{loadTeam(); loadMine(); loadTodos();});
     document.getElementById('addTodoBtn').addEventListener('click', async ()=>{
       const input = document.getElementById('newTodoText');

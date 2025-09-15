@@ -6,7 +6,6 @@ Dev Portal is a small, pragmatic dashboard that aggregates everyday developer si
 - Quickly see teammates’ Merge Requests that need review
 - Glance at your own open MRs and basic state (age, conflicts, WIP, reviewers)
 - Keep a tiny “today” todo list backed by a CSV file
-- Trigger a “rebase all my MRs” action against GitLab
 
 ## Features
 - Dashboard at `/` (served from `static/index.html` if present; otherwise an inline HTML page)
@@ -17,8 +16,6 @@ Dev Portal is a small, pragmatic dashboard that aggregates everyday developer si
   - `GET /api/widgets/todos` — returns simple list read from `data/todos.csv`
   - `POST /api/widgets/todos` — add a todo item `{ "text": "..." }`
   - `POST /api/widgets/todos/{id}/done` — mark todo as done (removes it from the CSV)
-- Action API:
-  - `POST /api/actions/rebase-all` — attempts to rebase all open MRs assigned to the configured user via GitLab API
 - GitLab MR fetching strategy:
   - Calls the Merge Requests API once per assignee username, aggregates, and de-duplicates by MR `id`
   - Returns a consistent, minimal JSON shape for the UI
@@ -35,7 +32,7 @@ Common variables:
 - `GITLAB_TOKEN` — Personal Access Token with API scope
 - `GITLAB_ASSIGNEES` — Comma-separated GitLab usernames to fetch as assignees (aggregated server-side)
 - `GITLAB_USERNAME` — Default username fallback if `GITLAB_ASSIGNEES` is empty
-- `MY_MRS_ASSIGNEE` — Optional override for the user targeted by `my-mrs` and `rebase-all` (defaults to `GITLAB_USERNAME`)
+- `MY_MRS_ASSIGNEE` — Optional override for the user targeted by `my-mrs` (defaults to `GITLAB_USERNAME`)
 
 Example `.env` (dummy values only):
 ```
@@ -71,7 +68,6 @@ Test endpoints (optional):
 ## Development notes
 - Static UI is located at `static/index.html`. If the file is removed, the app serves a minimal inline dashboard.
 - Todos are stored line-by-line in `data/todos.csv`. Completed items are removed.
-- The rebase action uses GitLab’s `PUT /projects/:id/merge_requests/:iid/rebase` per MR.
 
 ## Security and secrets
 - A proper `.gitignore` is included to ignore `.env` and `.env.local`. Keep real tokens in environment variables or `.env.local` only.
